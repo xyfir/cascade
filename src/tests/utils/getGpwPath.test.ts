@@ -1,11 +1,14 @@
 import { getGpwPath } from '../../utils/getGpwPath.js';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
 
 test("getGpwPath('')", () => {
-  expect(getGpwPath('')).toBe(`${process.cwd()}/.gitpw`);
+  assert.equal(getGpwPath(''), `${process.cwd()}/.gitpw`);
 });
 
 test("getGpwPath('files/id.json')", () => {
-  expect(getGpwPath('files/id.json')).toBe(
+  assert.equal(
+    getGpwPath('files/id.json'),
     `${process.cwd()}/.gitpw/files/id.json`,
   );
 });

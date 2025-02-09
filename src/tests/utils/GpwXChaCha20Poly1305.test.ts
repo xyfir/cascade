@@ -1,5 +1,7 @@
 import { GpwXChaCha20Poly1305 } from '../../utils/GpwXChaCha20Poly1305.js';
 import { GpwPBKDF2 } from '../../utils/GpwPBKDF2.js';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
 
 test('GpwXChaCha20Poly1305', async () => {
   const plaintext = 'Hello, World!';
@@ -25,7 +27,7 @@ test('GpwXChaCha20Poly1305', async () => {
     passkey,
   ).then((d) => d.toString('utf-8'));
 
-  expect(ciphertext).not.toBe(ciphertext2);
-  expect(ciphertext).not.toBe(plaintext);
-  expect(decrypted).toBe(plaintext);
+  assert.notEqual(ciphertext, ciphertext2);
+  assert.notEqual(ciphertext, plaintext);
+  assert.equal(decrypted, plaintext);
 });

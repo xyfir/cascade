@@ -1,15 +1,12 @@
 {
   "compilerOptions": {
-    "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true,
+    "moduleResolution": "nodenext",
     "esModuleInterop": true,
-    "sourceMap": true,
     "rootDir": "./src",
     "target": "esnext",
     "module": "NodeNext",
     "outDir": "./build",
     "strict": true
   },
-  "compileOnSave": true,
   "include": ["src"]
 }

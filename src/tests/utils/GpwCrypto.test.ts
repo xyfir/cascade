@@ -2,6 +2,8 @@ import { GpwKeychain } from '../../types/index.js';
 import { GpwPBKDF2 } from '../../utils/GpwPBKDF2.js';
 import { GpwCrypto } from '../../utils/GpwCrypto.js';
 import { nanoid } from 'nanoid';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
 
 test('GpwCrypto with AES-256-GCM', async () => {
   const plaintext = 'Hello, World!';
@@ -24,9 +26,9 @@ test('GpwCrypto with AES-256-GCM', async () => {
   const ciphertext2 = await GpwCrypto.encrypt(plaintext, keychain);
   const decrypted = await GpwCrypto.decrypt(ciphertext, keychain);
 
-  expect(ciphertext).not.toBe(ciphertext2);
-  expect(ciphertext).not.toBe(plaintext);
-  expect(decrypted).toBe(plaintext);
+  assert.notEqual(ciphertext, ciphertext2);
+  assert.notEqual(ciphertext, plaintext);
+  assert.equal(decrypted, plaintext);
 });
 
 test('GpwCrypto with XChaCha20-Poly1305', async () => {
@@ -50,9 +52,9 @@ test('GpwCrypto with XChaCha20-Poly1305', async () => {
   const ciphertext2 = await GpwCrypto.encrypt(plaintext, keychain);
   const decrypted = await GpwCrypto.decrypt(ciphertext, keychain);
 
-  expect(ciphertext).not.toBe(ciphertext2);
-  expect(ciphertext).not.toBe(plaintext);
-  expect(decrypted).toBe(plaintext);
+  assert.notEqual(ciphertext, ciphertext2);
+  assert.notEqual(ciphertext, plaintext);
+  assert.equal(decrypted, plaintext);
 });
 
 test('GpwCrypto with AES-256-GCM => XChaCha20-Poly1305', async () => {
@@ -86,9 +88,9 @@ test('GpwCrypto with AES-256-GCM => XChaCha20-Poly1305', async () => {
   const ciphertext2 = await GpwCrypto.encrypt(plaintext, keychain);
   const decrypted = await GpwCrypto.decrypt(ciphertext, keychain);
 
-  expect(ciphertext).not.toBe(ciphertext2);
-  expect(ciphertext).not.toBe(plaintext);
-  expect(decrypted).toBe(plaintext);
+  assert.notEqual(ciphertext, ciphertext2);
+  assert.notEqual(ciphertext, plaintext);
+  assert.equal(decrypted, plaintext);
 });
 
 test('GpwCrypto with XChaCha20-Poly1305 => AES-256-GCM', async () => {
@@ -122,7 +124,7 @@ test('GpwCrypto with XChaCha20-Poly1305 => AES-256-GCM', async () => {
   const ciphertext2 = await GpwCrypto.encrypt(plaintext, keychain);
   const decrypted = await GpwCrypto.decrypt(ciphertext, keychain);
 
-  expect(ciphertext).not.toBe(ciphertext2);
-  expect(ciphertext).not.toBe(plaintext);
-  expect(decrypted).toBe(plaintext);
+  assert.notEqual(ciphertext, ciphertext2);
+  assert.notEqual(ciphertext, plaintext);
+  assert.equal(decrypted, plaintext);
 });

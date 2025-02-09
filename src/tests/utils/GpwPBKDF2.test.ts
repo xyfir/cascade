@@ -1,11 +1,15 @@
 import { GpwPBKDF2 } from '../../utils/GpwPBKDF2.js';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
 
 test('GpwPBKDF2.generateIterations()', () => {
-  expect(GpwPBKDF2.generateIterations()).toBeGreaterThanOrEqual(1000000);
+  const iterations = GpwPBKDF2.generateIterations();
+  assert.ok(iterations >= 1000000, 'Iterations should be >= 1000000');
 });
 
 test('GpwPBKDF2.generateSalt()', () => {
-  expect(GpwPBKDF2.generateSalt()).toHaveLength(24);
+  const salt = GpwPBKDF2.generateSalt();
+  assert.equal(salt.length, 24, 'Salt should be 24 characters long');
 });
 
 test('GpwPBKDF2.deriveKey(pass, salt, itr)', async () => {
@@ -14,8 +18,8 @@ test('GpwPBKDF2.deriveKey(pass, salt, itr)', async () => {
   const itr = GpwPBKDF2.generateIterations(true);
   const key = await GpwPBKDF2.deriveKey(pass, salt, itr);
 
-  expect(/^[-A-Za-z0-9+/=]{44}$/.test(key)).toBe(true);
+  assert.match(key, /^[-A-Za-z0-9+/=]{44}$/, 'Key should be base64 encoded');
 
   const sameKey = await GpwPBKDF2.deriveKey(pass, salt, itr);
-  expect(key).toBe(sameKey);
+  assert.equal(key, sameKey, 'Same inputs should produce same key');
 });

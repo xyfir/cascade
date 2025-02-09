@@ -1,5 +1,7 @@
 import { GpwPBKDF2 } from '../../utils/GpwPBKDF2.js';
 import { GpwAES } from '../../utils/GpwAES.js';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
 
 test('GpwAES', async () => {
   const plaintext = 'Hello, World!';
@@ -22,7 +24,7 @@ test('GpwAES', async () => {
     passkey,
   ).then((d) => d.toString('utf-8'));
 
-  expect(ciphertext).not.toBe(ciphertext2);
-  expect(ciphertext).not.toBe(plaintext);
-  expect(decrypted).toBe(plaintext);
+  assert.notEqual(ciphertext, ciphertext2);
+  assert.notEqual(ciphertext, plaintext);
+  assert.equal(decrypted, plaintext);
 });

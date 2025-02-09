@@ -24,10 +24,13 @@ export class GpwCrypto {
 
       switch (key.type) {
         case 'XChaCha20-Poly1305':
-          data = await GpwXChaCha20Poly1305.encrypt(data, k);
+          data = (await GpwXChaCha20Poly1305.encrypt(
+            data,
+            k,
+          )) as Buffer<ArrayBuffer>;
           break;
         case 'AES-256-GCM':
-          data = await GpwAES.encrypt(data, k);
+          data = (await GpwAES.encrypt(data, k)) as Buffer<ArrayBuffer>;
           break;
         default:
           throw Error('Invalid encryption type');
@@ -52,10 +55,13 @@ export class GpwCrypto {
 
       switch (key.type) {
         case 'XChaCha20-Poly1305':
-          data = await GpwXChaCha20Poly1305.decrypt(data, k);
+          data = (await GpwXChaCha20Poly1305.decrypt(
+            data,
+            k,
+          )) as Buffer<ArrayBuffer>;
           break;
         case 'AES-256-GCM':
-          data = await GpwAES.decrypt(data, k);
+          data = (await GpwAES.decrypt(data, k)) as Buffer<ArrayBuffer>;
           break;
         default:
           throw Error('Invalid encryption type');

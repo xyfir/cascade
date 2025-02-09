@@ -1,9 +1,11 @@
 import { getPath } from '../../utils/getPath.js';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
 
 test("getPath('')", () => {
-  expect(getPath('')).toBe(process.cwd());
+  assert.equal(getPath(''), process.cwd());
 });
 
 test("getPath('.gitpw')", () => {
-  expect(getPath('.gitpw')).toBe(`${process.cwd()}/.gitpw`);
+  assert.equal(getPath('.gitpw'), `${process.cwd()}/.gitpw`);
 });
