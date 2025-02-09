@@ -1,6 +1,16 @@
+import type { Question } from 'inquirer';
 import { getGpwPath } from './getGpwPath.js';
 import { GpwPBKDF2 } from './GpwPBKDF2.js';
 import inquirer from 'inquirer';
+
+interface PasswordAnswer {
+  pass: string;
+}
+
+type PasswordPrompt = Question<PasswordAnswer> & {
+  type: 'password';
+  name: 'pass';
+};
 import type {
   GpwUnlockedKeychain,
   GpwRepoManifest,
@@ -32,12 +42,12 @@ export async function getSession(argv?: Argv<'session'>): Promise<Session> {
   } else {
     for (let i = 0; i < manifest.key_stretchers.length; i++) {
       await inquirer
-        .prompt<{ pass: string }>([
+        .prompt<PasswordAnswer>([
           {
             message: `Password for key #${i + 1}`,
             type: 'password',
             name: 'pass',
-          },
+          } as PasswordPrompt,
         ])
         .then((answers) => passwords.push(answers.pass));
     }

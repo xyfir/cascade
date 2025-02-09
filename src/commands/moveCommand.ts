@@ -1,9 +1,20 @@
 import { getUnlockedFileMap } from '../utils/getUnlockedFileMap.js';
 import type { Session, Argv } from '../types/index.js';
+import type { Question } from 'inquirer';
 import { getGpwPath } from '../utils/getGpwPath.js';
 import { GpwCrypto } from '../utils/GpwCrypto.js';
 import { getPath } from '../utils/getPath.js';
 import inquirer from 'inquirer';
+
+interface PathAnswer {
+  source?: string;
+  target?: string;
+}
+
+type InputPrompt = Question<PathAnswer> & {
+  type: 'input';
+  name: 'source' | 'target';
+};
 import fs from 'fs-extra';
 
 /**
@@ -19,11 +30,13 @@ export async function moveCommand(
   let source = argv!.source;
   if (!source) {
     source = await inquirer
-      .prompt<{ source: string }>({
-        message: 'Source file to move',
-        name: 'source',
-        type: 'input',
-      })
+      .prompt<PathAnswer>([
+        {
+          message: 'Source file to move',
+          name: 'source',
+          type: 'input',
+        } as InputPrompt,
+      ])
       .then((a) => a.source);
   }
 
@@ -41,11 +54,13 @@ export async function moveCommand(
   let target = argv!.target;
   if (!target) {
     target = await inquirer
-      .prompt<{ target: string }>({
-        message: 'Target path to move source to',
-        name: 'target',
-        type: 'input',
-      })
+      .prompt<PathAnswer>([
+        {
+          message: 'Target path to move source to',
+          name: 'target',
+          type: 'input',
+        } as InputPrompt,
+      ])
       .then((a) => a.target);
   }
 

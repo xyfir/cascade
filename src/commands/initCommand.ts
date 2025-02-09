@@ -1,4 +1,3 @@
-import type { PasswordQuestion, ListQuestion } from 'inquirer';
 import { getGpwPath } from '../utils/getGpwPath.js';
 import { GpwPBKDF2 } from '../utils/GpwPBKDF2.js';
 import { GpwCrypto } from '../utils/GpwCrypto.js';
@@ -16,6 +15,53 @@ import type {
   GpwKey,
   Argv,
 } from '../types/index.js';
+
+interface PromptAnswers {
+  [key: `keyType${number}`]: GpwKeyType;
+  [key: `keyPass${number}`]: string;
+  keyCount?: number;
+  vsCode?: boolean;
+}
+
+interface CommandAnswers {
+  encryption?: GpwKeyType[];
+  password?: string[];
+  vscode?: boolean;
+}
+
+type KeyAnswers = PromptAnswers & Partial<CommandAnswers>;
+
+type BaseQuestion<T extends string> = {
+  message: string;
+  name: T;
+  type: string;
+};
+
+type ListQuestion = BaseQuestion<`keyType${number}`> & {
+  type: 'list';
+  choices: GpwKeyType[];
+  default: GpwKeyType;
+};
+
+type PasswordQuestion = BaseQuestion<`keyPass${number}`> & {
+  type: 'password';
+};
+
+type NumberQuestion = BaseQuestion<'keyCount'> & {
+  type: 'number';
+  default: number;
+};
+
+type ConfirmQuestion = BaseQuestion<'vsCode'> & {
+  type: 'confirm';
+  default: boolean;
+};
+
+type PromptQuestion =
+  | ListQuestion
+  | PasswordQuestion
+  | NumberQuestion
+  | ConfirmQuestion;
 
 const execp = promisify(exec);
 
@@ -44,15 +90,15 @@ export async function initCommand(argv: Argv<'init'>): Promise<void> {
   const keyCount = useArgv
     ? argv!.encryption!.length
     : await inquirer
-        .prompt<{ keyCount: number }>([
+        .prompt<KeyAnswers>([
           {
             message: '# of keys to encrypt with',
             default: 1,
             name: 'keyCount',
             type: 'number',
-          },
+          } as NumberQuestion,
         ])
-        .then((a) => a.keyCount);
+        .then((a) => a.keyCount!);
 
   // What key types and passwords should we use?
   const encryptWith: [GpwKeyType, string][] = [];
@@ -61,7 +107,7 @@ export async function initCommand(argv: Argv<'init'>): Promise<void> {
       encryptWith.push([argv!.encryption![i], argv!.password![i]]);
     }
   } else {
-    const questions: (ListQuestion | PasswordQuestion)[] = [];
+    const questions = [] as PromptQuestion[];
     for (let i = 0; i < keyCount; i++) {
       questions.push({
         message: `Type of key #${i + 1}`,
@@ -72,33 +118,30 @@ export async function initCommand(argv: Argv<'init'>): Promise<void> {
       } as ListQuestion);
       questions.push({
         message: `Password for key #${i + 1}`,
-        choices: ['XChaCha20-Poly1305', 'AES-256-GCM'] as GpwKeyType[],
-        default: (i == 0 ? 'AES-256-GCM' : 'XChaCha20-Poly1305') as GpwKeyType,
         name: `keyPass${i}`,
         type: 'password',
       } as PasswordQuestion);
     }
-    const answers = await inquirer.prompt(questions);
+    const answers = await inquirer.prompt<KeyAnswers>(questions);
 
     for (let i = 0; i < keyCount; i++) {
-      encryptWith.push([
-        answers[`keyType${i}`] as GpwKeyType,
-        answers[`keyPass${i}`] as string,
-      ]);
+      encryptWith.push([answers[`keyType${i}`], answers[`keyPass${i}`]]);
     }
   }
 
   // Should we configure the repo for VS Code?
   const vsCode = useArgv
     ? argv!.vscode!
-    : await inquirer.prompt<{ vsCode: boolean }>([
-        {
-          message: 'Configure for VS Code?',
-          default: false,
-          type: 'confirm',
-          name: 'vsCode',
-        },
-      ]);
+    : await inquirer
+        .prompt<KeyAnswers>([
+          {
+            message: 'Configure for VS Code?',
+            default: false,
+            type: 'confirm',
+            name: 'vsCode',
+          } as ConfirmQuestion,
+        ])
+        .then((a) => a.vsCode!);
 
   // Create repo manifest
   const manifest: GpwRepoManifest = {

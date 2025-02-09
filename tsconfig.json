@@ -1,12 +1,18 @@
 {
   "compilerOptions": {
     "moduleResolution": "nodenext",
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
     "esModuleInterop": true,
+    "skipLibCheck": true,
     "rootDir": "./src",
     "target": "esnext",
     "module": "NodeNext",
     "outDir": "./build",
     "strict": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "ts-node": {
+    "esm": true
+  }
 }
