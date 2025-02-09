@@ -1,3 +1,4 @@
+import type { PasswordQuestion, ListQuestion } from 'inquirer';
 import { getGpwPath } from '../utils/getGpwPath.js';
 import { GpwPBKDF2 } from '../utils/GpwPBKDF2.js';
 import { GpwCrypto } from '../utils/GpwCrypto.js';
@@ -60,7 +61,7 @@ export async function initCommand(argv: Argv<'init'>): Promise<void> {
       encryptWith.push([argv!.encryption![i], argv!.password![i]]);
     }
   } else {
-    const questions: inquirer.Question[] = [];
+    const questions: (ListQuestion | PasswordQuestion)[] = [];
     for (let i = 0; i < keyCount; i++) {
       questions.push({
         message: `Type of key #${i + 1}`,
@@ -68,14 +69,14 @@ export async function initCommand(argv: Argv<'init'>): Promise<void> {
         default: (i == 0 ? 'AES-256-GCM' : 'XChaCha20-Poly1305') as GpwKeyType,
         name: `keyType${i}`,
         type: 'list',
-      } as inquirer.ListQuestion);
+      } as ListQuestion);
       questions.push({
         message: `Password for key #${i + 1}`,
         choices: ['XChaCha20-Poly1305', 'AES-256-GCM'] as GpwKeyType[],
         default: (i == 0 ? 'AES-256-GCM' : 'XChaCha20-Poly1305') as GpwKeyType,
         name: `keyPass${i}`,
         type: 'password',
-      } as inquirer.PasswordQuestion);
+      } as PasswordQuestion);
     }
     const answers = await inquirer.prompt(questions);
 

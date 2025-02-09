@@ -9,7 +9,7 @@
     "watch-build": "npm run build -- -w",
     "eslint": "eslint . --ext .ts,.json --max-warnings 0",
     "build": "tsc --project tsconfig.json",
-    "test": "node --test --loader ts-node/esm src/tests/**/*.test.ts",
+    "test": "node --test --loader ts-node/esm --test-reporter spec --no-warnings \"src/tests/*.test.ts\" \"src/tests/utils/*.test.ts\"",
     "cli": "node build/index.js"
   },
   "files": [
