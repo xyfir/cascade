@@ -7,7 +7,7 @@
   "license": "GPL-3.0",
   "scripts": {
     "watch-build": "npm run build -- -w",
-    "eslint": "eslint . --ext .ts,.json --max-warnings 0",
+    "eslint": "eslint . --max-warnings 0",
     "build": "rm -rf build && tsc --project tsconfig.json",
     "test": "npm run build && node --test --test-reporter spec \"build/tests/**/*.test.js\"",
     "cli": "node build/index.js"

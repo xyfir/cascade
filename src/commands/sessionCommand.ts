@@ -13,7 +13,6 @@ export async function sessionCommand(argv?: Argv<'session'>): Promise<never> {
   // Authenticate and prepare session
   const session = await getSession(argv);
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     // Prompt user for the command to run
     const { command } = await inquirer.prompt<{ command: Command }>([
