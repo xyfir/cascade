@@ -3,6 +3,6 @@
   "search.exclude": {
     "package-lock.json": true,
     "coverage": true,
-    "build": true,
-  },
+    "dist": true
+  }
 }

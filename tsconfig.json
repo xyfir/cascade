@@ -5,9 +5,10 @@
     "skipLibCheck": true,
     "rootDir": "./src",
     "module": "NodeNext",
-    "outDir": "./build",
+    "outDir": "./dist",
     "target": "es2022",
-    "strict": true
+    "strict": true,
+    "lib": ["ES2022", "DOM"]
   },
   "include": ["src"]
 }

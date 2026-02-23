@@ -1,73 +1,37 @@
-import type { GpwKeyType, Argv } from './types/index.js';
-import { runCommand } from './commands/runCommand.js';
-import { hideBin } from 'yargs/helpers';
-import yargs from 'yargs';
+/**
+ * Re-exports all public-facing modules
+ */
 
-yargs(hideBin(process.argv))
-  .option('password', {
-    description: 'Password(s) to encrypt/decrypt with, in order',
-    global: true,
-    alias: 'p',
-    array: true,
-  })
-  .command(
-    'init',
-    'Initialize a gitpw and git repository',
-    (yargs) =>
-      yargs
-        .option('encryption', {
-          description: 'Encryption method(s) to use, in order of passwords',
-          choices: ['XChaCha20-Poly1305', 'AES-256-GCM'] as GpwKeyType[],
-          alias: 'e',
-          array: true,
-        })
-        .option('vscode', {
-          description: 'Initialize a VSCode workspace',
-          boolean: true,
-          default: false,
-        }),
-    (argv) => runCommand('init', undefined, argv as Argv<'init'>),
-  )
-  .command(
-    'move [source] [target]',
-    'Move or rename a file using plaintext paths',
-    (yargs) =>
-      yargs
-        .positional('source', {
-          description: 'The source file to move',
-          type: 'string',
-        })
-        .positional('target', {
-          description: 'The new file path to move the source to',
-          type: 'string',
-        }),
-    (argv) => runCommand('move', undefined, argv as Argv<'move'>),
-  )
-  .command(
-    'save',
-    'Encrypt and track plaintext changes to the gitpw repo',
-    () => undefined,
-    (argv) => runCommand('save', undefined, argv as Argv<'save'>),
-  )
-  .command(
-    'lock',
-    'The same as the "save" command, but it wipes plaintext files after',
-    () => undefined,
-    (argv) => runCommand('lock', undefined, argv as Argv<'lock'>),
-  )
-  .command(
-    'session',
-    'Start an authenticated session to easily run multiple commands',
-    () => undefined,
-    (argv) => runCommand('session', undefined, argv as Argv<'session'>),
-  )
-  .command(
-    'unlock',
-    'Decrypt gitpw repo, overwriting existing plaintext files',
-    () => undefined,
-    (argv) => runCommand('unlock', undefined, argv as Argv<'unlock'>),
-  )
-  .demandCommand(1)
-  .global('password')
-  .help()
-  .parse();
+// Core factory
+export { cascade } from './cascade.js';
+
+// Algorithm cipher suites
+export { aesGcm } from './aesGcm.js';
+export { aesCtrHmac } from './aesCtrHmac.js';
+
+// Key derivation primitives
+export { pbkdf2 } from './pbkdf2.js';
+export { hkdf } from './hkdf.js';
+
+// Encoding helpers
+export { encoding } from './encoding.js';
+
+// Utilities
+export { secureWipe } from './secureWipe.js';
+
+// Algorithm presets
+export { presets } from './presets.js';
+
+// Types (compile-time only)
+export type {
+  Algorithm,
+  CascadeConfig,
+  CascadeInstance,
+  CipherSuite,
+  EncryptedData,
+  LayerKeys,
+  MasterKey,
+  MasterKeyBundle,
+  PasswordKey,
+  PasswordKeyParams,
+} from './types.js';
