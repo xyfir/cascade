@@ -48,6 +48,9 @@ export const encoding = {
     if (hex.length % 2 !== 0) {
       throw new Error('Hex string must have even length');
     }
+    if (hex.length > 0 && !/^[0-9a-fA-F]+$/.test(hex)) {
+      throw new Error('Hex string contains invalid characters');
+    }
     const bytes = new Uint8Array(hex.length / 2);
     for (let i = 0; i < bytes.length; i++) {
       bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);

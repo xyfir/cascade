@@ -3,11 +3,11 @@
  *
  * These tests exercise the full key hierarchy:
  *
- *   Password => (PBKDF2 + HKDF) => Password subkeys
+ *   Password => (Argon2id + KDF) => Password subkeys
  *     => encrypt/decrypt Master key material
- *   Master key material => (HKDF) => Master subkeys
+ *   Master key material => (KDF) => Master subkeys
  *     => encrypt/decrypt Content key material
- *   Content key material => (HKDF) => Content subkeys
+ *   Content key material => (KDF) => Content subkeys
  *     => encrypt/decrypt Data
  */
 
@@ -16,10 +16,12 @@ import assert from 'node:assert/strict';
 import { cascade } from '../cascade.js';
 import { presets } from '../presets.js';
 import { encoding } from '../encoding.js';
+import { ARGON2_OPSLIMIT_MIN, ARGON2_MEMLIMIT_MIN } from '../argon2.js';
 import type { EncryptedData } from '../types.js';
 
-// Use low iterations for fast tests
-const TEST_ITERATIONS = 1000;
+// Use minimum Argon2 parameters for fast tests
+const TEST_OPS = ARGON2_OPSLIMIT_MIN;
+const TEST_MEM = ARGON2_MEMLIMIT_MIN;
 
 // ===========================================================================
 // Full lifecycle
@@ -32,7 +34,8 @@ test('cascade: full lifecycle: password => master key => encrypt => decrypt', as
   // 2. Derive a password key
   const passwordKey = await c.derivePasswordKey({
     password: 'correct horse battery staple',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
 
   // 3. Generate a master key (encrypted by the password key)
@@ -65,22 +68,24 @@ test('cascade: full lifecycle: password => master key => encrypt => decrypt', as
 
 test('cascade: cross-session restore: re-derive password key, unlock master, decrypt', async () => {
   const c = cascade({
-    layers: [presets.AES_256_GCM, presets.AES_256_CTR_HMAC],
+    layers: [presets.AES_256_GCM, presets.XCHACHA20_POLY1305],
   });
 
   // --- Session 1: initial setup ---
   const passwordKey1 = await c.derivePasswordKey({
     password: 'my-session-password',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { encryptedMasterKey } = await c.generateMasterKey(passwordKey1);
   const plaintext = encoding.textToBytes('Persist me across sessions.');
   const masterKey1 = await c.unlockMasterKey(encryptedMasterKey, passwordKey1);
   const encrypted = await c.encrypt(plaintext, masterKey1);
 
-  // --- Simulate persisting: salt, iterations, encryptedMasterKey, encrypted data ---
+  // --- Simulate persisting: salt, opsLimit, memLimit, encryptedMasterKey, encrypted data ---
   const storedSalt = passwordKey1.salt;
-  const storedIterations = passwordKey1.iterations;
+  const storedOpsLimit = passwordKey1.opsLimit;
+  const storedMemLimit = passwordKey1.memLimit;
   const storedEncryptedMasterKey = encryptedMasterKey;
   const storedEncryptedContentKey = encrypted.encryptedContentKey;
   const storedCiphertext = encrypted.ciphertext;
@@ -89,7 +94,8 @@ test('cascade: cross-session restore: re-derive password key, unlock master, dec
   const passwordKey2 = await c.derivePasswordKey({
     password: 'my-session-password',
     salt: storedSalt,
-    iterations: storedIterations,
+    opsLimit: storedOpsLimit,
+    memLimit: storedMemLimit,
   });
   const masterKey2 = await c.unlockMasterKey(
     storedEncryptedMasterKey,
@@ -114,7 +120,8 @@ test('cascade: encrypt/decrypt multiple independent data items', async () => {
   const c = cascade({ layers: [presets.AES_256_GCM] });
   const passwordKey = await c.derivePasswordKey({
     password: 'multi-item',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -152,7 +159,8 @@ test('cascade: single layer of AES-256-GCM', async () => {
   const c = cascade({ layers: [presets.AES_256_GCM] });
   const passwordKey = await c.derivePasswordKey({
     password: 'single',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -162,27 +170,29 @@ test('cascade: single layer of AES-256-GCM', async () => {
   assert.equal(encoding.bytesToText(decrypted), 'Single layer test');
 });
 
-test('cascade: single layer of AES-256-CTR-HMAC', async () => {
-  const c = cascade({ layers: [presets.AES_256_CTR_HMAC] });
+test('cascade: single layer of XChaCha20-Poly1305', async () => {
+  const c = cascade({ layers: [presets.XCHACHA20_POLY1305] });
   const passwordKey = await c.derivePasswordKey({
-    password: 'single-ctr',
-    iterations: TEST_ITERATIONS,
+    password: 'single-xchacha',
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
-  const plaintext = encoding.textToBytes('CTR-HMAC single layer');
+  const plaintext = encoding.textToBytes('XChaCha20 single layer');
   const encrypted = await c.encrypt(plaintext, masterKey);
   const decrypted = await c.decrypt(encrypted, masterKey);
-  assert.equal(encoding.bytesToText(decrypted), 'CTR-HMAC single layer');
+  assert.equal(encoding.bytesToText(decrypted), 'XChaCha20 single layer');
 });
 
-test('cascade: mixed algorithms: GCM then CTR-HMAC', async () => {
+test('cascade: mixed algorithms: GCM then XChaCha20', async () => {
   const c = cascade({
-    layers: [presets.AES_256_GCM, presets.AES_256_CTR_HMAC],
+    layers: [presets.AES_256_GCM, presets.XCHACHA20_POLY1305],
   });
   const passwordKey = await c.derivePasswordKey({
     password: 'mixed',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -192,13 +202,14 @@ test('cascade: mixed algorithms: GCM then CTR-HMAC', async () => {
   assert.equal(encoding.bytesToText(decrypted), 'Mixed algorithm cascade');
 });
 
-test('cascade: mixed algorithms: CTR-HMAC then GCM', async () => {
+test('cascade: mixed algorithms: XChaCha20 then GCM', async () => {
   const c = cascade({
-    layers: [presets.AES_256_CTR_HMAC, presets.AES_256_GCM],
+    layers: [presets.XCHACHA20_POLY1305, presets.AES_256_GCM],
   });
   const passwordKey = await c.derivePasswordKey({
     password: 'mixed-reverse',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -212,12 +223,13 @@ test('cascade: many layers: 5x AES-256-GCM', async () => {
   const c = cascade({
     layers: Array(5).fill(presets.AES_256_GCM) as (
       | 'AES-256-GCM'
-      | 'AES-256-CTR-HMAC'
+      | 'XChaCha20-Poly1305'
     )[],
   });
   const passwordKey = await c.derivePasswordKey({
     password: 'five-layers',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -231,12 +243,13 @@ test('cascade: many layers: 10x mixed algorithms', async () => {
   const layers = Array(10)
     .fill(null)
     .map((_, i) =>
-      i % 2 === 0 ? presets.AES_256_GCM : presets.AES_256_CTR_HMAC,
+      i % 2 === 0 ? presets.AES_256_GCM : presets.XCHACHA20_POLY1305,
     );
   const c = cascade({ layers });
   const passwordKey = await c.derivePasswordKey({
     password: 'ten-layers',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -255,7 +268,8 @@ test('cascade: unlockMasterKey fails with wrong password', async () => {
 
   const correctPwKey = await c.derivePasswordKey({
     password: 'correct',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { encryptedMasterKey } = await c.generateMasterKey(correctPwKey);
 
@@ -263,7 +277,8 @@ test('cascade: unlockMasterKey fails with wrong password', async () => {
   const wrongPwKey = await c.derivePasswordKey({
     password: 'wrong',
     salt: correctPwKey.salt,
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
 
   await assert.rejects(() => c.unlockMasterKey(encryptedMasterKey, wrongPwKey));
@@ -275,13 +290,15 @@ test('cascade: decrypt fails with wrong master key', async () => {
   // Set up two independent master keys
   const pw1 = await c.derivePasswordKey({
     password: 'key1',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey: mk1 } = await c.generateMasterKey(pw1);
 
   const pw2 = await c.derivePasswordKey({
     password: 'key2',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey: mk2 } = await c.generateMasterKey(pw2);
 
@@ -297,7 +314,8 @@ test('cascade: decrypt fails when ciphertext is tampered', async () => {
   const c = cascade({ layers: [presets.AES_256_GCM] });
   const passwordKey = await c.derivePasswordKey({
     password: 'tamper-ct',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
   const encrypted = await c.encrypt(
@@ -319,7 +337,8 @@ test('cascade: decrypt fails when encrypted content key is tampered', async () =
   const c = cascade({ layers: [presets.AES_256_GCM] });
   const passwordKey = await c.derivePasswordKey({
     password: 'tamper-key',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
   const encrypted = await c.encrypt(
@@ -339,11 +358,12 @@ test('cascade: decrypt fails when encrypted content key is tampered', async () =
 
 test('cascade: unlockMasterKey fails when encrypted master key is tampered', async () => {
   const c = cascade({
-    layers: [presets.AES_256_GCM, presets.AES_256_CTR_HMAC],
+    layers: [presets.AES_256_GCM, presets.XCHACHA20_POLY1305],
   });
   const passwordKey = await c.derivePasswordKey({
     password: 'tamper-master',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { encryptedMasterKey } = await c.generateMasterKey(passwordKey);
 
@@ -362,7 +382,8 @@ test('cascade: encrypt/decrypt binary data with all 256 byte values', async () =
   const c = cascade({ layers: [presets.AES_256_GCM] });
   const passwordKey = await c.derivePasswordKey({
     password: 'binary',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -378,7 +399,8 @@ test('cascade: encrypt/decrypt empty data', async () => {
   const c = cascade({ layers: [presets.AES_256_GCM] });
   const passwordKey = await c.derivePasswordKey({
     password: 'empty',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -391,7 +413,8 @@ test('cascade: encrypt/decrypt large data (1 MB)', async () => {
   const c = cascade({ layers: [presets.AES_256_GCM] });
   const passwordKey = await c.derivePasswordKey({
     password: 'large',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -414,7 +437,8 @@ test('cascade: text => encrypt => base64 => store => base64 => decrypt => text',
   const c = cascade({ layers: [presets.AES_256_GCM] });
   const passwordKey = await c.derivePasswordKey({
     password: 'encoding-test',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -445,6 +469,32 @@ test('cascade: throws if no layers are provided', () => {
   assert.throws(() => cascade({ layers: [] }), /at least one layer/);
 });
 
+test('cascade: throws if too many layers are provided', () => {
+  const layers = Array(11).fill(presets.AES_256_GCM) as (
+    | 'AES-256-GCM'
+    | 'XChaCha20-Poly1305'
+  )[];
+  assert.throws(() => cascade({ layers }), /at most 10 layers/);
+});
+
+test('cascade: allows exactly MAX_LAYERS layers', async () => {
+  const layers = Array(10).fill(presets.AES_256_GCM) as (
+    | 'AES-256-GCM'
+    | 'XChaCha20-Poly1305'
+  )[];
+  const c = cascade({ layers });
+  const passwordKey = await c.derivePasswordKey({
+    password: 'max-layers',
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
+  });
+  const { masterKey } = await c.generateMasterKey(passwordKey);
+  const plaintext = encoding.textToBytes('Max layers');
+  const encrypted = await c.encrypt(plaintext, masterKey);
+  const decrypted = await c.decrypt(encrypted, masterKey);
+  assert.equal(encoding.bytesToText(decrypted), 'Max layers');
+});
+
 // ===========================================================================
 // Encrypt produces unique output each call (random content keys)
 // ===========================================================================
@@ -453,7 +503,8 @@ test('cascade: encrypting same data twice produces different ciphertext', async 
   const c = cascade({ layers: [presets.AES_256_GCM] });
   const passwordKey = await c.derivePasswordKey({
     password: 'unique-ct',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -483,11 +534,13 @@ test('cascade: different passwords produce independent master key hierarchies', 
   // Two users, same cascade config, different passwords
   const pw1 = await c.derivePasswordKey({
     password: 'alice',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const pw2 = await c.derivePasswordKey({
     password: 'bob',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
 
   const { masterKey: mk1, encryptedMasterKey: emk1 } =
@@ -513,11 +566,12 @@ test('cascade: different passwords produce independent master key hierarchies', 
 
 test('cascade: generateMasterKey then unlockMasterKey produces functionally equivalent keys', async () => {
   const c = cascade({
-    layers: [presets.AES_256_GCM, presets.AES_256_CTR_HMAC],
+    layers: [presets.AES_256_GCM, presets.XCHACHA20_POLY1305],
   });
   const passwordKey = await c.derivePasswordKey({
     password: 'round-trip-master',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
 
   const { masterKey: mkGenerated, encryptedMasterKey } =
@@ -543,7 +597,7 @@ test('cascade: generateMasterKey then unlockMasterKey produces functionally equi
 
 test('presets: provides correct algorithm strings', () => {
   assert.equal(presets.AES_256_GCM, 'AES-256-GCM');
-  assert.equal(presets.AES_256_CTR_HMAC, 'AES-256-CTR-HMAC');
+  assert.equal(presets.XCHACHA20_POLY1305, 'XChaCha20-Poly1305');
 });
 
 test('presets: can be used to configure cascade layers', async () => {
@@ -551,14 +605,15 @@ test('presets: can be used to configure cascade layers', async () => {
   const c = cascade({
     layers: [
       presets.AES_256_GCM,
-      presets.AES_256_CTR_HMAC,
+      presets.XCHACHA20_POLY1305,
       presets.AES_256_GCM,
     ],
   });
 
   const passwordKey = await c.derivePasswordKey({
     password: 'presets-test',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -576,7 +631,8 @@ test('cascade: 50 items encrypted and decrypted with the same master key', async
   const c = cascade({ layers: [presets.AES_256_GCM] });
   const passwordKey = await c.derivePasswordKey({
     password: 'stress',
-    iterations: TEST_ITERATIONS,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
@@ -599,25 +655,26 @@ test('cascade: 50 items encrypted and decrypted with the same master key', async
 });
 
 // ===========================================================================
-// CTR-HMAC specific cascade tests
+// XChaCha20-Poly1305 specific cascade tests
 // ===========================================================================
 
-test('cascade: all-CTR-HMAC cascade with tampering detection', async () => {
+test('cascade: all-XChaCha20 cascade with tampering detection', async () => {
   const c = cascade({
-    layers: [presets.AES_256_CTR_HMAC, presets.AES_256_CTR_HMAC],
+    layers: [presets.XCHACHA20_POLY1305, presets.XCHACHA20_POLY1305],
   });
   const passwordKey = await c.derivePasswordKey({
-    password: 'ctr-tamper',
-    iterations: TEST_ITERATIONS,
+    password: 'xchacha-tamper',
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
   });
   const { masterKey } = await c.generateMasterKey(passwordKey);
 
-  const plaintext = encoding.textToBytes('CTR-HMAC cascade');
+  const plaintext = encoding.textToBytes('XChaCha20 cascade');
   const encrypted = await c.encrypt(plaintext, masterKey);
 
   // Normal decrypt works
   const decrypted = await c.decrypt(encrypted, masterKey);
-  assert.equal(encoding.bytesToText(decrypted), 'CTR-HMAC cascade');
+  assert.equal(encoding.bytesToText(decrypted), 'XChaCha20 cascade');
 
   // Tampered ciphertext is detected
   const tampered: EncryptedData = {
@@ -626,4 +683,154 @@ test('cascade: all-CTR-HMAC cascade with tampering detection', async () => {
   };
   tampered.ciphertext[20] ^= 0xff;
   await assert.rejects(() => c.decrypt(tampered, masterKey));
+});
+
+// ===========================================================================
+// changePassword
+// ===========================================================================
+
+test('cascade: changePassword re-encrypts master key under new password', async () => {
+  const c = cascade({
+    layers: [presets.AES_256_GCM, presets.XCHACHA20_POLY1305],
+  });
+
+  // Derive old password key and generate master key
+  const oldPwKey = await c.derivePasswordKey({
+    password: 'old-password',
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
+  });
+  const { masterKey, encryptedMasterKey } = await c.generateMasterKey(oldPwKey);
+
+  // Encrypt some data
+  const plaintext = encoding.textToBytes('Survive password change');
+  const encrypted = await c.encrypt(plaintext, masterKey);
+
+  // Change password
+  const newPwKey = await c.derivePasswordKey({
+    password: 'new-password',
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
+  });
+  const newEncryptedMasterKey = await c.changePassword(
+    encryptedMasterKey,
+    oldPwKey,
+    newPwKey,
+  );
+
+  // Unlock with new password and decrypt
+  const unlockedMk = await c.unlockMasterKey(newEncryptedMasterKey, newPwKey);
+  const decrypted = await c.decrypt(encrypted, unlockedMk);
+  assert.equal(encoding.bytesToText(decrypted), 'Survive password change');
+
+  // Old password can no longer unlock the new encrypted master key
+  await assert.rejects(() =>
+    c.unlockMasterKey(newEncryptedMasterKey, oldPwKey),
+  );
+});
+
+// ===========================================================================
+// Key lifecycle helpers
+// ===========================================================================
+
+test('cascade: wipePasswordKey zeroes all layer key material', async () => {
+  const c = cascade({ layers: [presets.AES_256_GCM] });
+  const passwordKey = await c.derivePasswordKey({
+    password: 'wipe-me',
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
+  });
+
+  // Verify keys are non-zero before wipe
+  for (const lk of passwordKey.layerKeys) {
+    const hasNonZero = lk.key.some((b) => b !== 0);
+    assert.ok(hasNonZero, 'Key should have non-zero bytes before wipe');
+  }
+
+  await c.wipePasswordKey(passwordKey);
+
+  // All keys should be zero after wipe
+  for (const lk of passwordKey.layerKeys) {
+    const allZero = lk.key.every((b) => b === 0);
+    assert.ok(allZero, 'Key should be all zeros after wipe');
+  }
+});
+
+test('cascade: wipeMasterKey zeroes all layer key material', async () => {
+  const c = cascade({ layers: [presets.AES_256_GCM] });
+  const passwordKey = await c.derivePasswordKey({
+    password: 'wipe-master',
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
+  });
+  const { masterKey } = await c.generateMasterKey(passwordKey);
+
+  // Verify keys are non-zero before wipe
+  for (const lk of masterKey.layerKeys) {
+    const hasNonZero = lk.key.some((b) => b !== 0);
+    assert.ok(hasNonZero, 'Key should have non-zero bytes before wipe');
+  }
+
+  await c.wipeMasterKey(masterKey);
+
+  // All keys should be zero after wipe
+  for (const lk of masterKey.layerKeys) {
+    const allZero = lk.key.every((b) => b === 0);
+    assert.ok(allZero, 'Key should be all zeros after wipe');
+  }
+});
+
+// ===========================================================================
+// Mismatched cascade config
+// ===========================================================================
+
+test('cascade: data encrypted with [AES, XChaCha] cannot be decrypted with [XChaCha, AES]', async () => {
+  const c1 = cascade({
+    layers: [presets.AES_256_GCM, presets.XCHACHA20_POLY1305],
+  });
+  const c2 = cascade({
+    layers: [presets.XCHACHA20_POLY1305, presets.AES_256_GCM],
+  });
+
+  const pw1 = await c1.derivePasswordKey({
+    password: 'mismatch',
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
+  });
+  const { masterKey: mk1 } = await c1.generateMasterKey(pw1);
+  const encrypted = await c1.encrypt(
+    encoding.textToBytes('mismatch test'),
+    mk1,
+  );
+
+  // Different cascade config cannot decrypt
+  const pw2 = await c2.derivePasswordKey({
+    password: 'mismatch',
+    salt: pw1.salt,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
+  });
+  const { masterKey: mk2 } = await c2.generateMasterKey(pw2);
+  await assert.rejects(() => c2.decrypt(encrypted, mk2));
+});
+
+// ===========================================================================
+// Uint8Array password
+// ===========================================================================
+
+test('cascade: accepts Uint8Array password', async () => {
+  const c = cascade({ layers: [presets.AES_256_GCM] });
+  const password = new TextEncoder().encode('byte-password');
+
+  const passwordKey = await c.derivePasswordKey({
+    password,
+    opsLimit: TEST_OPS,
+    memLimit: TEST_MEM,
+  });
+  const { masterKey } = await c.generateMasterKey(passwordKey);
+
+  const plaintext = encoding.textToBytes('Uint8Array password');
+  const encrypted = await c.encrypt(plaintext, masterKey);
+  const decrypted = await c.decrypt(encrypted, masterKey);
+  assert.equal(encoding.bytesToText(decrypted), 'Uint8Array password');
 });

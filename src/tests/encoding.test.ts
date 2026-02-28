@@ -104,6 +104,17 @@ test('encoding: hexToBytes throws on odd-length string', () => {
   assert.throws(() => encoding.hexToBytes('abc'), /even length/);
 });
 
+test('encoding: hexToBytes throws on invalid hex characters', () => {
+  assert.throws(() => encoding.hexToBytes('ghij'), /invalid characters/);
+  assert.throws(() => encoding.hexToBytes('zz00'), /invalid characters/);
+  assert.throws(() => encoding.hexToBytes('xx'), /invalid characters/);
+});
+
+test('encoding: hexToBytes accepts uppercase hex', () => {
+  const result = encoding.hexToBytes('DEADBEEF');
+  assert.deepEqual(result, new Uint8Array([0xde, 0xad, 0xbe, 0xef]));
+});
+
 // ---------------------------------------------------------------------------
 // concatBytes
 // ---------------------------------------------------------------------------
@@ -143,19 +154,19 @@ test('encoding: concatBytes with single argument returns copy', () => {
 // secureWipe
 // ---------------------------------------------------------------------------
 
-test('secureWipe: zeroes a buffer', () => {
+test('secureWipe: zeroes a buffer', async () => {
   const buffer = new Uint8Array([1, 2, 3, 4, 5]);
-  secureWipe(buffer);
+  await secureWipe(buffer);
   assert.deepEqual(buffer, new Uint8Array(5)); // all zeros
 });
 
-test('secureWipe: handles empty buffer', () => {
+test('secureWipe: handles empty buffer', async () => {
   const buffer = new Uint8Array(0);
-  secureWipe(buffer); // should not throw
+  await secureWipe(buffer); // should not throw
   assert.equal(buffer.length, 0);
 });
 
-test('secureWipe: zeroes a large buffer', () => {
+test('secureWipe: zeroes a large buffer', async () => {
   const buffer = globalThis.crypto.getRandomValues(new Uint8Array(10_000));
 
   // Verify it's not already all zeros
@@ -168,7 +179,7 @@ test('secureWipe: zeroes a large buffer', () => {
   }
   assert.ok(hasNonZero, 'Random buffer should have non-zero bytes');
 
-  secureWipe(buffer);
+  await secureWipe(buffer);
 
   for (let i = 0; i < buffer.length; i++) {
     assert.equal(buffer[i], 0, `Byte at index ${i} should be zero`);

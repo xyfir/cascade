@@ -2,60 +2,71 @@
 
 **Experimental proof of concept. Not recommended for production.**
 
-Zero-dependency isomorphic TypeScript library for cascading encryption. Encrypt data through multiple layers of symmetric ciphers with user-defined algorithm ordering.
+Isomorphic TypeScript library for cascading encryption. Encrypt data through multiple layers of symmetric ciphers with user-defined algorithm ordering.
 
-Inspired by VeraCrypt's cascading encryption, Cascade lets you specify an arbitrary sequence of encryption algorithms. Data passes through each layer in order, with independent keys derived for every layer via HKDF.
+Inspired by VeraCrypt's cascading encryption, Cascade lets you specify an arbitrary sequence of encryption algorithms. Data passes through each layer in order, with independent keys derived for every layer.
+
+Uses **libsodium** (via `libsodium-wrappers-sumo`) for Argon2id password hashing, XChaCha20-Poly1305 encryption, KDF, and secure memory wiping. Uses the **Web Crypto API** for AES-256-GCM encryption (ensuring isomorphic support across all platforms).
 
 ## Key Hierarchy
 
 ```
 Password (user-supplied)
-  │
-  ├─ PBKDF2-SHA-512 ──► 32-byte base key
-  │                         │
-  │                     HKDF-SHA-256 per layer ──► Password subkeys
-  │
-  ▼
+  |
+  +-- Argon2id --> 32-byte base key
+  |                  |
+  |              crypto_kdf per layer --> Password subkeys
+  |
+  v
 Master Key (random 32 bytes)
-  │
-  ├─ Encrypted by password subkeys (stored)
-  │
-  ├─ HKDF-SHA-256 per layer ──► Master subkeys
-  │
-  ▼
+  |
+  +-- Encrypted by password subkeys (stored)
+  |
+  +-- crypto_kdf per layer --> Master subkeys
+  |
+  v
 Content Key (random 32 bytes, per data item)
-  │
-  ├─ Encrypted by master subkeys (stored with data)
-  │
-  ├─ HKDF-SHA-256 per layer ──► Content subkeys
-  │
-  ▼
-Data ◄──► Encrypted by content subkeys
+  |
+  +-- Encrypted by master subkeys (stored with data)
+  |
+  +-- crypto_kdf per layer --> Content subkeys
+  |
+  v
+Data <--> Encrypted by content subkeys
 ```
 
 ## Algorithm Presets
 
-| Preset             | Cipher           | Authentication                  | Key Material |
-| ------------------ | ---------------- | ------------------------------- | ------------ |
-| `AES-256-GCM`      | AES-GCM, 256-bit | Built-in (GHASH)                | 32 bytes     |
-| `AES-256-CTR-HMAC` | AES-CTR, 256-bit | HMAC-SHA-256 (encrypt-then-MAC) | 64 bytes     |
-
-Both use the standard Web Crypto API without external dependencies.
+| Preset               | Cipher             | Authentication      | Key Length |
+| -------------------- | ------------------ | ------------------- | ---------- |
+| `AES-256-GCM`        | AES-GCM, 256-bit   | Built-in (GHASH)    | 32 bytes   |
+| `XChaCha20-Poly1305` | XChaCha20, 256-bit | Built-in (Poly1305) | 32 bytes   |
 
 ## Usage
 
 ```typescript
-import { cascade, presets, encoding } from './index.js';
+import {
+  cascade,
+  presets,
+  encoding,
+  ARGON2_OPSLIMIT_MODERATE,
+  ARGON2_MEMLIMIT_MODERATE,
+} from './index.js';
 
 // Configure a 3-layer cascade
 const c = cascade({
-  layers: [presets.AES_256_GCM, presets.AES_256_CTR_HMAC, presets.AES_256_GCM],
+  layers: [
+    presets.AES_256_GCM,
+    presets.XCHACHA20_POLY1305,
+    presets.AES_256_GCM,
+  ],
 });
 
-// Derive password key (store salt + iterations for re-derivation)
+// Derive password key (store salt + opsLimit + memLimit for re-derivation)
 const passwordKey = await c.derivePasswordKey({
   password: 'correct horse battery staple',
-  iterations: 600_000,
+  opsLimit: ARGON2_OPSLIMIT_MODERATE,
+  memLimit: ARGON2_MEMLIMIT_MODERATE,
 });
 
 // Generate master key (store encryptedMasterKey)
@@ -74,7 +85,8 @@ console.log(encoding.bytesToText(decrypted)); // "Secret document"
 const restoredPwKey = await c.derivePasswordKey({
   password: 'correct horse battery staple',
   salt: passwordKey.salt, // stored from first session
-  iterations: passwordKey.iterations,
+  opsLimit: passwordKey.opsLimit,
+  memLimit: passwordKey.memLimit,
 });
 const restoredMasterKey = await c.unlockMasterKey(
   encryptedMasterKey, // stored from first session

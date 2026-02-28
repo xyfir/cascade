@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 /** Supported symmetric cipher algorithms for cascading encryption layers. */
-export type Algorithm = 'AES-256-GCM' | 'AES-256-CTR-HMAC';
+export type Algorithm = 'AES-256-GCM' | 'XChaCha20-Poly1305';
 
 // ---------------------------------------------------------------------------
 // Cipher suite interface
@@ -11,24 +11,21 @@ export type Algorithm = 'AES-256-GCM' | 'AES-256-CTR-HMAC';
 
 /**
  * A cipher suite encapsulates the encrypt/decrypt logic for one algorithm.
- * Each suite knows how much key material it needs and how to import, encrypt,
- * and decrypt with that material.
+ * Each suite knows its key length and how to encrypt/decrypt with raw key
+ * material (Uint8Array).
  */
 export interface CipherSuite {
   /** Algorithm identifier. */
   readonly algorithm: Algorithm;
 
-  /** Number of raw bytes of key material required (e.g. 32 for AES-GCM, 64 for CTR+HMAC). */
-  readonly keyMaterialLength: number;
+  /** Number of bytes of key material required (32 for both supported algorithms). */
+  readonly keyLength: number;
 
-  /** Import raw key material into one or more CryptoKeys for use with this suite. */
-  importKeys(material: Uint8Array): Promise<CryptoKey[]>;
-
-  /** Encrypt data. Returns a self-contained blob (IV/nonce + ciphertext + tag). */
-  encrypt(data: Uint8Array, keys: CryptoKey[]): Promise<Uint8Array>;
+  /** Encrypt data. Returns a self-contained blob (nonce + ciphertext + tag). */
+  encrypt(data: Uint8Array, key: Uint8Array): Promise<Uint8Array>;
 
   /** Decrypt a blob produced by `encrypt`. Throws on authentication failure. */
-  decrypt(data: Uint8Array, keys: CryptoKey[]): Promise<Uint8Array>;
+  decrypt(data: Uint8Array, key: Uint8Array): Promise<Uint8Array>;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,32 +46,42 @@ export interface CascadeConfig {
 // Key types
 // ---------------------------------------------------------------------------
 
-/** Derived CryptoKeys for a single cascade layer. */
+/** Derived key material for a single cascade layer. */
 export interface LayerKeys {
   algorithm: Algorithm;
-  keys: CryptoKey[];
+  key: Uint8Array;
 }
 
 /**
- * Parameters for deriving a password key via PBKDF2.
+ * Parameters for deriving a password key via Argon2id.
  *
- * If `salt` is omitted, a cryptographically random 32-byte salt is generated.
+ * If `salt` is omitted, a cryptographically random 16-byte salt is generated.
+ * Use the exported ARGON2_* constants from `argon2.ts` for `opsLimit` and
+ * `memLimit` values.
  */
 export interface PasswordKeyParams {
-  password: string;
-  iterations: number;
+  /**
+   * User password. Prefer `Uint8Array` over `string` when possible —
+   * JavaScript strings are immutable and cannot be wiped from memory.
+   * When a `Uint8Array` is provided, the caller is responsible for
+   * wiping it after `derivePasswordKey()` resolves.
+   */
+  password: string | Uint8Array;
+  opsLimit: number;
+  memLimit: number;
   salt?: Uint8Array;
 }
 
 /**
  * A password-derived key with per-layer subkeys.
  *
- * Store `salt` and `iterations` for future re-derivation. The `layerKeys`
- * are session-only (derived fresh each time from the password).
+ * Store `salt`, `opsLimit`, and `memLimit` for future re-derivation. The
+ * `layerKeys` are session-only (derived fresh each time from the password).
  */
 export interface PasswordKey {
   salt: Uint8Array;
-  iterations: number;
+  opsLimit: number;
+  memLimit: number;
   layerKeys: LayerKeys[];
 }
 
@@ -118,7 +125,7 @@ export interface EncryptedData {
  * The public API surface returned by `cascade()`.
  */
 export interface CascadeInstance {
-  /** Derive a password key from a user-supplied password via PBKDF2 + HKDF. */
+  /** Derive a password key from a user-supplied password via Argon2id + KDF. */
   derivePasswordKey(params: PasswordKeyParams): Promise<PasswordKey>;
 
   /** Generate a new random master key and encrypt it with the password key. */
@@ -138,4 +145,22 @@ export interface CascadeInstance {
     encryptedData: EncryptedData,
     masterKey: MasterKey,
   ): Promise<Uint8Array>;
+
+  /**
+   * Re-encrypt the master key under a new password.
+   *
+   * Decrypts the raw master material with `oldPasswordKey`, then re-encrypts
+   * it with `newPasswordKey`. Returns the new encrypted master key blob.
+   */
+  changePassword(
+    encryptedMasterKey: Uint8Array,
+    oldPasswordKey: PasswordKey,
+    newPasswordKey: PasswordKey,
+  ): Promise<Uint8Array>;
+
+  /** Securely wipe all layer key material from a PasswordKey. */
+  wipePasswordKey(passwordKey: PasswordKey): Promise<void>;
+
+  /** Securely wipe all layer key material from a MasterKey. */
+  wipeMasterKey(masterKey: MasterKey): Promise<void>;
 }
